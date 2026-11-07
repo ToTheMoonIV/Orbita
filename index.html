@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orbita</title>
+<style>
+:root{--bg:#02040c;--fg:#f2f5ff;--mut:#8b96b8;--pan:rgba(16,24,52,.88);--line:#2f3b70;--acc:#6ea8ff;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:#000;color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#stage{position:absolute;left:50%;top:50%;width:1600px;height:900px;transform-origin:0 0;background:var(--bg);overflow:hidden}
+canvas{position:absolute;inset:0;width:1600px;height:900px}
+#verdict{position:absolute;left:48px;top:30px;font-size:56px;font-weight:800}
+#alt{position:absolute;left:50px;top:100px;font-size:24px;color:var(--mut)}
+.fall{color:#ff6b6b}.orbit{color:#4ade80}.escape{color:#fbbf24}
+.panel{position:absolute;left:48px;right:48px;bottom:26px;display:flex;gap:20px;align-items:stretch}
+.rows{flex:1;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:14px}
+.lab{width:96px;font-size:22px;color:var(--mut)}
+.btns{display:flex;gap:8px}
+.row input[type=range]{flex:1;accent-color:var(--acc);height:28px;min-width:200px}
+.val{width:200px;font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.val small{font-size:18px;color:var(--mut);font-weight:400;margin-left:8px}
+button{background:var(--pan);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:20px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--acc)}
+#go{background:var(--acc);color:#04102a;font-weight:800;font-size:26px;padding:0 34px}
+
+/* --- Mobile-first layout override --- */
+html, body {
+  width:100%; height:100%; margin:0; overflow:hidden;
+  overscroll-behavior:none; touch-action:pan-y;
+}
+#stage {
+  position:fixed !important; inset:0 !important;
+  left:0 !important; top:0 !important;
+  width:100vw !important; height:100dvh !important;
+  transform:none !important; transform-origin:initial !important;
+  overflow:hidden;
+}
+#stage canvas {
+  left:0; top:0; right:auto; bottom:auto;
+  width:100vw; height:56.25vw;
+  max-height:48dvh;
+  object-fit:fill;
+}
+#verdict {
+  left:16px; top:12px; font-size:clamp(25px,7vw,42px);
+  line-height:1.05; max-width:90vw;
+}
+#alt {
+  left:17px; top:54px; font-size:clamp(13px,3.5vw,18px);
+}
+.panel {
+  left:12px; right:12px; bottom:max(12px, env(safe-area-inset-bottom));
+  display:flex; flex-direction:column; gap:12px;
+  align-items:stretch;
+}
+.rows { gap:10px; }
+.row {
+  display:grid; grid-template-columns:72px minmax(0,1fr);
+  gap:7px 9px; align-items:center;
+}
+.lab { width:auto; font-size:15px; }
+.btns {
+  display:flex; flex-wrap:wrap; gap:6px;
+  grid-column:2; grid-row:1;
+}
+button {
+  min-height:42px; padding:8px 11px;
+  border-radius:10px; font-size:14px;
+  white-space:normal; touch-action:manipulation;
+}
+.row input[type=range] {
+  grid-column:1 / -1; grid-row:2;
+  width:100%; min-width:0; height:32px; margin:0;
+  touch-action:pan-x;
+}
+.val {
+  grid-column:1 / -1; grid-row:3;
+  width:auto; font-size:20px; line-height:1.1;
+}
+.val small { font-size:13px; }
+#go {
+  width:100%; min-height:52px; font-size:21px;
+  border-radius:14px;
+}
+@media (max-height:650px) and (orientation:landscape) {
+  #stage canvas { width:56.25dvh; height:56.25dvh; max-height:44dvh; }
+  #verdict { font-size:clamp(22px,5vh,34px); }
+  #alt { top:48px; font-size:13px; }
+  .panel { left: min(58vw, 520px); bottom:8px; gap:6px; }
+  .rows { gap:5px; }
+  .row { grid-template-columns:60px minmax(0,1fr); gap:4px 6px; }
+  .lab { font-size:13px; }
+  button { min-height:34px; padding:5px 8px; font-size:12px; }
+  .val { font-size:16px; }
+  #go { min-height:40px; font-size:17px; }
+}
+
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="verdict"></div>
+  <div id="alt"></div>
+  <div class="panel">
+    <div class="rows">
+      <div class="row"><span class="lab">Pitch</span>
+        <div class="btns"><button data-a="90">Verticale</button><button data-a="45">45°</button><button data-a="0">Orizzontale</button></div>
+        <input id="a" type="range" min="0" max="90" step="1" value="0"><span class="val" id="av"></span></div>
+      <div class="row"><span class="lab">Velocità</span>
+        <div class="btns"><button data-v="5">Bassa</button><button data-v="7.91">Orbita minima</button><button data-v="9.5">Eccentrica</button><button data-v="11.3">Fuga</button></div>
+        <input id="v" type="range" min="0" max="12" step="0.01" value="5"><span class="val" id="vv"></span></div>
+    </div>
+    <button id="go">🚀 Lancia</button>
+  </div>
+</div>
+<script>
+const MU=398600,R=6371,K=100,H0=1,COL={fall:"#ff6b6b",orbit:"#4ade80",escape:"#fbbf24"};
+const cv=document.getElementById("c"),ctx=cv.getContext("2d"),$=id=>document.getElementById(id);
+const SW=1600,SH=900,CY=385,D=Math.max(1,devicePixelRatio||1)*1.25;
+cv.width=SW*D;cv.height=SH*D;ctx.setTransform(D,0,0,D,0,0);
+let runs=[],prev=null;
+const cam={x:0,y:R,ls:Math.log(2),tx:0,ty:R,tls:Math.log(2)};
+const stars=Array.from({length:180},()=>[Math.random()*SW,Math.random()*SH,Math.random()*1.5+.4]);
+const sc=()=>Math.exp(cam.ls),X=x=>SW/2+(x-cam.x)*sc(),Y=y=>CY-(y-cam.y)*sc();
+/* terre stilizzate (lat,lon) – proiezione ortografica centrata su Europa/Africa */
+const LAND=[
+[36,-5.5,36.8,-8.8,43,-9,43.5,-1.7,46,-1.2,48.4,-4.7,48.7,-1.5,50,1.5,51.5,3.5,53,5,54,8.5,57,10,58,7,63,6,68,14,71,26,69,33,67,41,68,45,70,60,73,80,77,100,73,110,70,150,55,140,35,125,21,108,10,108,1.5,104,8,98,17,96,22,90,21,87,13,80,8,78,8,77,15,74,21,72.5,23,68,25,66,25,61,26,57,25,56.5,22.5,59.8,19.5,58.5,17,55,14.5,49,13,45,12.5,43.5,16,42,22,38,27,35,29,34.8,31,34.5,36,36,36.5,34,36.5,30,37,27.5,39.5,26.2,40.3,26.2,40.8,24,40.2,23,38.5,24,37.5,24,36.5,22.8,37.8,21.2,39.5,20,40.5,19.5,42,19.2,44,15.5,45.6,13.7,45,12.3,44,12.5,42.5,14.2,41.9,16,40.5,18,40.1,18.5,40.4,17,38,16.2,39.8,15.8,41,13,42,11,44,10,44.3,8.5,43.3,6,43.2,5.4,43.4,3.2,41.7,3.1,39.5,0,37.5,-0.8,36.7,-2.5],
+[35.8,-5.4,35.2,-2.9,36.7,3,37,10,35,11,33,13,32.5,15,31,20,32.5,21,31,25,31.5,30,31.2,32.5,29.5,32.7,27.5,33.7,24,35.5,22,36.8,18,38.5,15,40,12,43,12,51,8,49,2,45.5,-4,39.5,-10,40.5,-15,40.7,-25,33,-34,26,-34.5,19,-30,17,-22,14.5,-17.5,11.8,-12,13.5,-5,12,-1,9,4.3,6,5,-2,4.5,-8,6,-10.5,9,-13.3,12,-16.8,14.7,-17.5,21,-17,27,-13,30,-9.8,33.5,-7.5,35.8,-5.9],
+[-12,49,-16,50,-25,47,-25,44,-17,44],
+[38.2,12.5,38.2,15.6,37,15.3,36.7,15,37.5,12.6],[41.2,9.2,39.2,9.6,39,8.4,40.9,8.2],
+[50,-5.5,50.7,1.3,53,1.7,55,-1.5,58.5,-3,58.6,-5,56,-6,54.5,-3.2,53.3,-4.5,51.5,-5.2],
+[51.5,-9.8,52,-6.3,55,-6,55,-8,53,-10],[63.4,-20,63.5,-18,64.5,-13.5,66.5,-15,66.4,-22.5,65,-24,64,-22],
+[60,-44,63,-40,70,-22,80,-17,83,-30,82,-60,76,-70,69,-53,64,-52],
+[60,-75,60,-65,52,-56,47,-53,45,-61,43,-66,42,-70,41,-72,40,-74,35,-75.5,30,-81,25.5,-80,25,-81.5,30,-85,29,-90,26,-97.5,20,-97,21,-87,15,-83,9,-79.5,8,-77,11,-74.5,11,-71,10,-62,5,-52,0,-50,-5,-35,-13,-38.5,-23,-41,-30,-50,-35,-57,-55,-70,-20,-120,30,-120,60,-120]];
+const SEA=[
+[41.2,28.5,43,28,45,29.7,46.5,31,45.5,33,44.5,34,45,37,43.5,40,41.2,41,41,36,42,33,41.2,29.5],
+[37,50,41,49,45,48,47,52,44,52,40,53,37,54],
+[54,10.5,54.5,14,54.5,19,57,21,60,22,60,25,60,30,65,25.5,65.5,24,63,21,60,19,59,17,56,16,56,12.5,55.5,11.5],
+[24,52,26,50.5,29.5,48.5,30,50,27.5,52,26,56.3,25,56]];
+function proj(a){const p0=35*Math.PI/180,l0=15*Math.PI/180,o=[];
+  for(let i=0;i<a.length;i+=2){const f=a[i]*Math.PI/180,dl=a[i+1]*Math.PI/180-l0;
+    let u=Math.cos(f)*Math.sin(dl),v=Math.cos(p0)*Math.sin(f)-Math.sin(p0)*Math.cos(f)*Math.cos(dl);
+    const c=Math.sin(p0)*Math.sin(f)+Math.cos(p0)*Math.cos(f)*Math.cos(dl);
+    if(c<0){const n=Math.hypot(u,v)||1;u/=n;v/=n}o.push([u,v])}return o}
+const LANDP=LAND.map(proj),SEAP=SEA.map(proj);
+function fit(){$("stage").style.transform="none"}
+function analyze(v,deg){
+  const r0=R+H0,g=deg*Math.PI/180,eps=v*v/2-MU/r0,h=r0*v*Math.cos(g);
+  if(eps>=0)return{kind:"escape",apo:Infinity};
+  const a=-MU/(2*eps),e=Math.sqrt(Math.max(0,1+2*eps*h*h/(MU*MU))),peri=a*(1-e);
+  return{kind:peri>=R-50?"orbit":"fall",apo:a*(1+e),a};
+}
+function simulate(v,deg){
+  const A=analyze(v,deg),g=deg*Math.PI/180,dt=5;
+  let x=0,y=R+H0,vx=v*Math.cos(g),vy=v*Math.sin(g);
+  const acc=(x,y)=>{const r=Math.hypot(x,y),k=-MU/(r*r*r);return[k*x,k*y]};
+  let[ax,ay]=acc(x,y);const pts=[[x,y]];
+  const maxT=A.kind==="orbit"?3*2*Math.PI*Math.sqrt(A.a**3/MU):1e6;
+  for(let i=1;i<9000&&i*dt<maxT;i++){
+    x+=vx*dt+.5*ax*dt*dt;y+=vy*dt+.5*ay*dt*dt;
+    const[nx,ny]=acc(x,y);vx+=.5*(ax+nx)*dt;vy+=.5*(ay+ny)*dt;ax=nx;ay=ny;
+    const r=Math.hypot(x,y);
+    if(A.kind==="fall"&&r<R&&i>2){pts.push([x*R/r,y*R/r]);break}
+    pts.push([x,y]);
+    if(A.kind==="escape"&&r>2.4*R)break;
+  }
+  return{pts,kind:A.kind,apo:A.apo,i:0,done:false,a:1,dying:false};
+}
+function setCamera(s){
+  let x0=0,x1=0,y0=R,y1=R+H0;
+  s.pts.forEach(p=>{x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])});
+  if(s.kind==="fall")y1=Math.max(y1,R+K*1.25);
+  else{x0=Math.min(x0,-R);x1=Math.max(x1,R);y0=Math.min(y0,-R);y1=Math.max(y1,R)}
+  const bw=Math.max(x1-x0,450),bh=Math.max(y1-y0,260);
+  cam.tx=(x0+x1)/2;cam.ty=(y0+y1)/2;cam.tls=Math.log(Math.min(SW*.8/bw,SH*.66/bh));
+}
+/* posizione a schermo con rialzo grafico (non in scala): ~14 px sopra la superficie, svanisce salendo */
+function sp(p){const r=Math.hypot(p[0],p[1]),h=Math.max(r-R,0),o=14*Math.exp(-h*sc()/80);
+  return[X(p[0])+p[0]/r*o,Y(p[1])-p[1]/r*o]}
+function path(pts,n){ctx.beginPath();for(let i=0;i<=n&&i<pts.length;i++){const q=sp(pts[i]);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1])}ctx.stroke()}
+function poly(Pp,col,ex,ey,rs){ctx.fillStyle=col;ctx.beginPath();Pp.forEach((q,i)=>{const px=ex+q[0]*rs,py=ey-q[1]*rs;i?ctx.lineTo(px,py):ctx.moveTo(px,py)});ctx.closePath();ctx.fill()}
+function draw(){
+  cam.x+=(cam.tx-cam.x)*.07;cam.y+=(cam.ty-cam.y)*.07;cam.ls+=(cam.tls-cam.ls)*.07;
+  const s=sc(),ex=X(0),ey=Y(0),rs=R*s;
+  ctx.fillStyle="#02040c";ctx.fillRect(0,0,SW,SH);
+  ctx.fillStyle="#fff";stars.forEach(t=>{ctx.globalAlpha=.3+t[2]/3;ctx.fillRect(t[0],t[1],t[2],t[2])});ctx.globalAlpha=1;
+  const g=ctx.createRadialGradient(ex,ey,rs,ex,ey,(R+K)*s);
+  g.addColorStop(0,"rgba(110,180,255,.85)");g.addColorStop(1,"rgba(110,180,255,0)");
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(ex,ey,(R+K)*s,0,7);ctx.fill();
+  ctx.save();ctx.beginPath();ctx.arc(ex,ey,rs,0,7);ctx.clip();
+  ctx.fillStyle="#1f5fbf";ctx.fillRect(0,0,SW,SH);
+  LANDP.forEach(p=>poly(p,"#3f9b52",ex,ey,rs));SEAP.forEach(p=>poly(p,"#1f5fbf",ex,ey,rs));
+  ctx.restore();
+  ctx.strokeStyle="#8fc2ff";ctx.lineWidth=2;ctx.beginPath();ctx.arc(ex,ey,rs,0,7);ctx.stroke();
+  ctx.strokeStyle="#ff9ad5";ctx.lineWidth=2.5;ctx.setLineDash([14,10]);
+  ctx.beginPath();ctx.arc(ex,ey,(R+K)*s,0,7);ctx.stroke();ctx.setLineDash([]);
+  const ly=Y(R+K),lx=Math.min(Math.max(X(0)+18,30),SW-420);
+  ctx.fillStyle="#ff9ad5";ctx.font="700 26px system-ui";ctx.fillText("SPAZIO  ·  100 km",lx,ly-12);
+  if(K*s>45){ctx.fillStyle="rgba(190,220,255,.85)";ctx.fillText("ATMOSFERA",lx,ly+36)}
+  /* rampa di lancio: ~1 km sopra il suolo (esagerata) */
+  const sp0=sp([0,R+H0]);ctx.strokeStyle="#d9e2ff";ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(X(0),Y(R));ctx.lineTo(sp0[0],sp0[1]);ctx.stroke();
+  ctx.lineWidth=4;
+  runs.forEach(r=>{
+    ctx.globalAlpha=r.a;ctx.strokeStyle=COL[r.kind];path(r.pts,Math.floor(r.i));
+    const q=sp(r.pts[Math.min(Math.floor(r.i),r.pts.length-1)]);
+    if(!r.done){ctx.fillStyle="#fff";ctx.shadowColor=COL[r.kind];ctx.shadowBlur=22;ctx.beginPath();ctx.arc(q[0],q[1],8,0,7);ctx.fill();ctx.shadowBlur=0}
+    else if(r.kind==="fall"){ctx.fillStyle=COL.fall;ctx.font="800 34px system-ui";ctx.fillText("✖",q[0]-12,q[1]+12)}
+    ctx.globalAlpha=1;
+  });
+  if(prev){ctx.strokeStyle=COL[prev.kind];ctx.globalAlpha=.5;ctx.lineWidth=2.5;ctx.setLineDash([6,10]);path(prev.pts,prev.pts.length);ctx.setLineDash([]);ctx.globalAlpha=1}
+  if(!runs.length||runs.every(r=>r.dying)){ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(sp0[0],sp0[1],7,0,7);ctx.fill()}
+}
+function frame(){
+  runs.forEach(r=>{
+    if(r.dying)r.a-=.035;
+    if(!r.done){
+      const a=r.pts[Math.floor(r.i)],b=r.pts[Math.min(Math.floor(r.i)+1,r.pts.length-1)];
+      const d=Math.hypot(b[0]-a[0],b[1]-a[1])*sc()||1;
+      r.i+=Math.min(3,Math.max(.05,8/d));
+      if(r.i>=r.pts.length-1){r.i=r.pts.length-1;r.done=true}}});
+  runs=runs.filter(r=>r.a>0);
+  draw();requestAnimationFrame(frame)
+}
+const fmt=(n,d)=>n.toFixed(d).replace(".",",");
+function update(){
+  const v=+$("v").value,a=+$("a").value,A=analyze(v,a);
+  $("vv").innerHTML=fmt(v,2)+" km/s";
+  $("av").innerHTML=a+"°";
+  const t={fall:"Ricade",orbit:"ORBITA ✓",escape:"Fuga →"},vd=$("verdict");
+  vd.textContent=t[A.kind];vd.className=A.kind;
+  $("alt").textContent=A.apo===Infinity?"":"quota max "+Math.round(A.apo-R).toLocaleString("it-IT")+" km";
+  prev=simulate(v,a);setCamera(prev);
+}
+function launch(){update();runs.forEach(r=>r.dying=true);runs.push(simulate(+$("v").value,+$("a").value))}
+$("v").oninput=$("a").oninput=update;$("go").onclick=launch;
+document.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{$("a").value=b.dataset.a;launch()});
+document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{$("v").value=b.dataset.v;launch()});
+addEventListener("keydown",e=>{
+  const v=$("v"),a=$("a");
+  if(e.code==="Space"){e.preventDefault();launch()}
+  else if(e.key==="ArrowRight"){v.value=Math.min(12,+v.value+.1);update()}
+  else if(e.key==="ArrowLeft"){v.value=Math.max(0,+v.value-.1);update()}
+  else if(e.key==="ArrowUp"){a.value=Math.min(90,+a.value+5);update()}
+  else if(e.key==="ArrowDown"){a.value=Math.max(0,+a.value-5);update()}
+});
+addEventListener("resize",fit);fit();update();cam.x=cam.tx;cam.y=cam.ty;cam.ls=cam.tls;frame();
+</script>
+</body>
+</html>
